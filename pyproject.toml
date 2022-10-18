@@ -1,0 +1,44 @@
+[project]
+name = "last"
+description = "The LAttice-based Speech Transducer (LAST) library"
+readme = "README.md"
+requires-python = ">=3.7"
+license = {file = "LICENSE"}
+authors = [{name = "LAST authors"}]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Science/Research",
+]
+keywords = ["speech", "jax"]
+
+# pip dependencies of the project
+dependencies = [
+  "flax>=0.6.1",
+  "jax>=0.3.21",
+]
+
+# This is set automatically by flit using `last.__version__`
+dynamic = ["version"]
+
+[project.urls]
+homepage = "https://github.com/google-research/last"
+repository = "https://github.com/google-research/last"
+# Other: `documentation`, `changelog`
+
+[project.optional-dependencies]
+# Development deps (unittest, linting, formating,...)
+# Installed through `pip install .[dev]`
+dev = [
+  "absl-py",
+  "numpy",
+  "pytest",
+  "pytest-xdist",
+  "pylint>=2.6.0",
+  "yapf",
+]
+
+[build-system]
+requires = ["flit_core >=3.5,<4"]
+build-backend = "flit_core.buildapi"
