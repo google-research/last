@@ -1,5 +1,6 @@
 [project]
-name = "last"
+# Unfortunately PyPI doesn't allow us to use "last" as the package name.
+name = "last-asr"
 description = "The LAttice-based Speech Transducer (LAST) library"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -42,3 +43,6 @@ dev = [
 [build-system]
 requires = ["flit_core >=3.5,<4"]
 build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "last"
