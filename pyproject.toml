@@ -2,7 +2,7 @@
 name = "last"
 description = "The LAttice-based Speech Transducer (LAST) library"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 license = {file = "LICENSE"}
 authors = [{name = "LAST authors"}]
 classifiers = [
