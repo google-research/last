@@ -14,6 +14,7 @@
 
 """LAST API."""
 
+from last import contexts
 from last import semirings
 
 # A new PyPI release will be pushed everytime `__version__` is increased.
