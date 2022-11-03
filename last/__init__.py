@@ -16,6 +16,7 @@
 
 from last import contexts
 from last import semirings
+from last import weight_fns
 
 # A new PyPI release will be pushed everytime `__version__` is increased.
 __version__ = '0.0.1'

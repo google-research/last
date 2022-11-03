@@ -23,7 +23,7 @@ class LastTest(absltest.TestCase):
     """Checks the module can be imported and important names are present."""
     import last  # pylint: disable=g-import-not-at-top
     names = dir(last)
-    for name in ['__version__', 'contexts', 'semirings']:
+    for name in ['__version__', 'contexts', 'semirings', 'weight_fns']:
       self.assertIn(name, names)
 
 
