@@ -14,6 +14,7 @@
 
 """LAST API."""
 
+from last import alignments
 from last import contexts
 from last import semirings
 from last import weight_fns
