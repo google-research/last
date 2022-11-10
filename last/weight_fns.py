@@ -210,8 +210,9 @@ class JointWeightFn(WeightFn[jnp.ndarray]):
     joint = nn.tanh(
         self.param('joint_bias', nn.initializers.zeros, (self.hidden_size,)) +
         projected_context_embeddings + projected_frame)
-    weights = nn.Dense(self.vocab_size + 1)(joint)
-    return weights[..., 0], weights[..., 1:]
+    blank = jnp.squeeze(nn.Dense(1)(joint), axis=-1)
+    lexical = nn.Dense(self.vocab_size)(joint)
+    return blank, lexical
 
 
 class SharedEmbCacher(WeightFnCacher[jnp.ndarray]):
@@ -264,3 +265,52 @@ class SharedRNNCacher(WeightFnCacher[jnp.ndarray]):
       inputs = einops.repeat(inputs, 'n ... -> (v n) ...', v=self.vocab_size)
       parts.append(embeddings)
     return jnp.concatenate(parts, axis=0)
+
+
+class NullCacher(WeightFnCacher[type(None)]):
+  """A cacher that simply returns None.
+
+  Mainly used with TableWeightFn for unit testing.
+  """
+
+  @nn.compact
+  def __call__(self) -> None:
+    return None
+
+
+class TableWeightFn(WeightFn[type(None)]):
+  """Weight function that looks up a fixed table, useful for testing.
+
+  Attributes:
+    table: [batch_dims..., input_vocab_size, num_context_states, 1 + vocab_size]
+      arc weight table. For each input frame, we simply cast the 0-th element
+      into an integer "input label" and look up the corresponding weights. The
+      weights of blank arcs are stored at `table[..., 0]`, and the weights of
+      lexical arcs at `table[..., 1:]`.
+  """
+  table: jnp.ndarray
+
+  @nn.compact
+  def __call__(
+      self,
+      cache: None,
+      frame: jnp.ndarray,
+      state: Optional[jnp.ndarray] = None) -> tuple[jnp.ndarray, jnp.ndarray]:
+    del cache
+
+    *batch_dims, input_vocab_size, num_context_states, _ = self.table.shape
+    if frame.shape[:-1] != tuple(batch_dims):
+      raise ValueError(f'frame should have batch_dims={tuple(batch_dims)} but '
+                       f'got {frame.shape[:-1]}')
+
+    frame_mask = nn.one_hot(frame[..., 0].astype(jnp.int32), input_vocab_size)
+    weights = jnp.einsum('...xcy,...x->...cy', self.table, frame_mask)
+
+    if state is not None:
+      state = jnp.broadcast_to(state, batch_dims)
+      state_mask = nn.one_hot(state, num_context_states)
+      weights = jnp.einsum('...cy,...c->...y', weights, state_mask)
+
+    blank = weights[..., 0]
+    lexical = weights[..., 1:]
+    return blank, lexical

@@ -24,7 +24,8 @@ class LastTest(absltest.TestCase):
     import last  # pylint: disable=g-import-not-at-top
     names = dir(last)
     for name in [
-        '__version__', 'alignments', 'contexts', 'semirings', 'weight_fns'
+        '__version__', 'alignments', 'contexts', 'semirings', 'weight_fns',
+        'RecognitionLattice'
     ]:
       self.assertIn(name, names)
 

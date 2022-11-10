@@ -35,6 +35,7 @@ repository = "https://github.com/google-research/last"
 dev = [
   "absl-py",
   "numpy",
+  "optax",
   "pytest",
   "pytest-xdist",
   "pylint>=2.6.0",

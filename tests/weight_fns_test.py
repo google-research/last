@@ -43,6 +43,53 @@ class WeightFnTest(absltest.TestCase):
     npt.assert_allclose(actual_blank, expect_blank, rtol=1e-3, atol=1e-6)
     npt.assert_allclose(actual_lexical, expect_lexical, rtol=1e-6)
 
+  def test_NullCacher(self):
+    cacher = weight_fns.NullCacher()
+    cache, params = cacher.init_with_output(jax.random.PRNGKey(0))
+    self.assertIsNone(cache)
+    self.assertDictEqual(params.unfreeze(), {})
+
+  def test_TableWeightFn(self):
+    with self.subTest('batch ndim = 0'):
+      table = jnp.arange(5 * 4 * 3).reshape([5, 4, 3])
+      weight_fn = weight_fns.TableWeightFn(table)
+
+      frame = jnp.array([1., 2.])
+      (blank, lexical), params = weight_fn.init_with_output(
+          jax.random.PRNGKey(0), None, frame)
+      self.assertDictEqual(params.unfreeze(), {})
+      npt.assert_array_equal(blank, table[1, :, 0])
+      npt.assert_array_equal(lexical, table[1, :, 1:])
+
+      state = jnp.array(3)
+      blank, lexical = weight_fn.apply(params, None, frame, state)
+      npt.assert_array_equal(blank, table[1, 3, 0])
+      npt.assert_array_equal(lexical, table[1, 3, 1:])
+
+      with self.assertRaisesRegex(
+          ValueError, r'frame should have batch_dims=\(\) but got \(1,\)'):
+        weight_fn.apply(params, None, frame[jnp.newaxis])
+
+    with self.subTest('batch ndim = 1'):
+      table = jnp.arange(2 * 5 * 4 * 3).reshape([2, 5, 4, 3])
+      weight_fn = weight_fns.TableWeightFn(table)
+
+      frame = jnp.array([[1., 2.], [4., 3.]])
+      (blank, lexical), params = weight_fn.init_with_output(
+          jax.random.PRNGKey(0), None, frame)
+      self.assertDictEqual(params.unfreeze(), {})
+      npt.assert_array_equal(blank, [table[0, 1, :, 0], table[1, 4, :, 0]])
+      npt.assert_array_equal(lexical, [table[0, 1, :, 1:], table[1, 4, :, 1:]])
+
+      state = jnp.array([3, 2])
+      blank, lexical = weight_fn.apply(params, None, frame, state)
+      npt.assert_array_equal(blank, [table[0, 1, 3, 0], table[1, 4, 2, 0]])
+      npt.assert_array_equal(lexical, [table[0, 1, 3, 1:], table[1, 4, 2, 1:]])
+
+      with self.assertRaisesRegex(
+          ValueError, r'frame should have batch_dims=\(2,\) but got \(1, 2\)'):
+        weight_fn.apply(params, None, frame[jnp.newaxis])
+
 
 class LocallyNormalizedWeightFnTest(absltest.TestCase):
 
