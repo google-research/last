@@ -16,7 +16,7 @@
 
 from collections.abc import Callable, Sequence
 import functools
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, Protocol, TypeVar
 
 import flax.linen as nn
 import jax
@@ -187,8 +187,8 @@ class RecognitionLattice(nn.Module, Generic[T]):
         semiring=semiring)
     if isinstance(self.weight_fn, weight_fns.LocallyNormalizedWeightFn):
       return -numerator
-    denominator, _ = self._forward(
-        cache=cache, frames=frames, num_frames=num_frames, semiring=semiring)
+    denominator = self._forward_backward(
+        cache=cache, frames=frames, num_frames=num_frames)
     return denominator - numerator
 
   def shortest_path(
@@ -506,6 +506,256 @@ class RecognitionLattice(nn.Module, Generic[T]):
         out_axes=len(batch_dims))(self.weight_fn, init_carry, inputs)
 
     return semiring.sum(alpha_T, axis=-1), alpha_0_to_T_minus_1
+
+  class BackwardStepCallback(Protocol):
+    """Callback signature used in the backward algorithm loop."""
+
+    # Type names.
+    # pylint: disable=invalid-name
+    Blank = jnp.ndarray
+    Lexical = jnp.ndarray
+    ParamsGrad = Any
+    CacheGrad = Any
+    FrameGrad = jnp.ndarray
+    Carry = TypeVar('Carry')
+    Output = Any
+    # pylint: enable=invalid-name
+
+    def __call__(self, weight_vjp_fn: Callable[[Blank, Lexical],
+                                               tuple[ParamsGrad, CacheGrad,
+                                                     FrameGrad]], carry: Carry,
+                 blank_marginal: Blank,
+                 lexical_marginals: Lexical) -> tuple[Carry, Output]:
+      """Callback used in the backward algorithm loop.
+
+      Standard backward algorithm simply computes the arc marginals and backward
+      weights. Through a custom callback, we can perform on the fly processing
+      beyond these without having to store all the arc marginals. An example is
+      accumulating the gradients with respect to weight function parameters (see
+      _forward_backward).
+
+      Args:
+        weight_vjp_fn: VJP function of the weight function. Callable of the
+          signature (blank_grad, lexical_grad) -> (params_grad, cache_grad,
+          frame_grad).
+        carry: PyTree of custom callback carry data.
+        blank_marginal: [batch_dims..., num_context_states] marginal probability
+          of blank arcs.
+        lexical_marginals: [batch_dims..., num_context_states, vocab_size]
+          marginal probability of lexical arcs.
+
+      Returns:
+        next_carry and step outputs.
+      """
+      raise NotImplementedError
+
+  def _backward(
+      self,
+      cache: T,
+      frames: jnp.ndarray,
+      num_frames: jnp.ndarray,
+      log_z: jnp.ndarray,
+      alpha_0_to_T_minus_1: jnp.ndarray,  # pylint: disable=invalid-name
+      init_callback_carry: ...,
+      callback: BackwardStepCallback) -> tuple[Any, Any]:
+    """Computes arc marginals under the log semiring using the backward algorithm.
+
+    Under the log semiring, arc weights can be viewed as unnormalized log
+    probabilities, and a conditional distribution over paths can be defined by
+    normalizing with respect to the exponentiated shortest distance (i.e. sum of
+    unnormalized path probabilities). The marginal probability of each arc can
+    then be computed with the backward algorithm.
+
+    Mathematically, under the log semiring, arc marginals are equal to the
+    gradients of shortest distance with respect to arc weights. The backward
+    algorithm offers a slightly more efficient method for computing these
+    gradients than reverse mode automatic differentiation with gradient
+    rematerialization:
+    -   Both methods compute the arc weights twice: once in the forward pass,
+        once in the backward pass.
+    -   Both methods carry out the "backward-broadcast" operation, i.e.
+        broadcasting the backward weights from a destination state to all source
+        states, once in the backward pass.
+    -   Autodiff carries out the "forward-reduce" operation, i.e. summing up
+        path weights to the same destination state, twice: once in the forward
+        pass, once in the backward pass.
+    -   Forward-backward only carries out the "forward-reduce" operation once,
+        in the forward pass.
+
+    In other words, forward-backward saves one "forward-reduce" operation. The
+    savings can be significant when the "forward-reduce" call is often
+    expensive, which is the main justification for all this added complexity.
+
+    Args:
+      cache: Weight function cache data.
+      frames: [batch_dims..., max_num_frames, feature_size] padded frame
+        sequences.
+      num_frames: [batch_dims...] number of frames.
+      log_z: [batch_dims...] shortest distance from _forward(). Under the log
+        semiring, the shortest distance is the log-normalizer, thus the name.
+      alpha_0_to_T_minus_1: [batch_dims..., max_num_frames, num_context_states]
+        forward weights from _forward().
+      init_callback_carry: PyTree of initial carry value for the callback.
+      callback: Callback used in the backward algorithm loop.
+
+    Returns:
+      (final_callback_carry, callback_outputs) tuple.
+    """
+    batch_dims = num_frames.shape
+    if frames.shape[:-2] != batch_dims:
+      raise ValueError('frames and num_frames have different batch_dims: '
+                       f'{frames.shape[:-2]} vs {batch_dims}')
+    if log_z.shape != batch_dims:
+      raise ValueError('log_z and num_frames have different batch_dims: '
+                       f'{log_z.shape} vs {batch_dims}')
+    if alpha_0_to_T_minus_1.shape[:-2] != batch_dims:
+      raise ValueError(
+          'alpha_0_to_T_minus_1 and num_frames have different '
+          f'batch_dims: {alpha_0_to_T_minus_1.shape[:-2]} vs {batch_dims}')
+
+    def step(lattice, carry, inputs):
+      # beta: [batch_dims..., num_context_states]
+      t, beta, callback_carry = carry
+      # alpha: [batch_dims..., num_context_states]
+      # frame: [batch_dims..., hidden_size]
+      alpha, frame = inputs
+      # blank: [batch_dims..., num_context_states]
+      # lexical: [batch_dims..., num_context_states, vocab_size]
+      (blank, lexical), weight_vjp_fn = nn.vjp(
+          lambda lattice, cache, frame: lattice.weight_fn(cache, frame),
+          lattice, cache, frame)
+      # We currently only support alignment-state-invariant weights.
+      blank = [blank for _ in range(self.alignment.num_states())]
+      lexical = [lexical for _ in range(self.alignment.num_states())]
+      next_beta, blank_marginal, lexical_marginals = self.alignment.backward(
+          alpha=alpha,
+          blank=blank,
+          lexical=lexical,
+          beta=beta,
+          log_z=log_z,
+          context=self.context)
+      # We currently only support alignment-state-invariant weights.
+      blank_marginal = jnp.sum(jnp.stack(blank_marginal), axis=0)
+      lexical_marginals = jnp.sum(jnp.stack(lexical_marginals), axis=0)
+      # Mask out marginals on padding positions.
+      is_padding = (t >= num_frames)[..., jnp.newaxis]
+      next_beta = jnp.where(is_padding, beta, next_beta)
+      blank_marginal = jnp.where(is_padding, 0, blank_marginal)
+      lexical_marginals = jnp.where(is_padding[..., jnp.newaxis], 0,
+                                    lexical_marginals)
+      next_callback_carry, callback_outputs = callback(
+          weight_vjp_fn=weight_vjp_fn,
+          carry=callback_carry,
+          blank_marginal=blank_marginal,
+          lexical_marginals=lexical_marginals)
+
+      return (t - 1, next_beta, next_callback_carry), callback_outputs
+
+    num_context_states, _ = self.context.shape()
+    init_beta = semirings.Log.ones([*batch_dims, num_context_states],
+                                   log_z.dtype)
+    init_t = frames.shape[-2] - 1
+    init_carry = (init_t, init_beta, init_callback_carry)
+
+    inputs = (alpha_0_to_T_minus_1, frames)
+    (_, _, final_callback_carry), callback_outputs = nn.scan(
+        step,
+        variable_broadcast='params',
+        split_rngs={'params': False},
+        in_axes=len(batch_dims),
+        out_axes=len(batch_dims),
+        reverse=True)(self, init_carry, inputs)
+
+    return final_callback_carry, callback_outputs
+
+  def _forward_backward(self, cache: T, frames: jnp.ndarray,
+                        num_frames: jnp.ndarray) -> jnp.ndarray:
+    """Shortest distance under the log semiring with gradients computed using the backward algorithm.
+
+    Args:
+      cache: Weight function cache data.
+      frames: [batch_dims..., max_num_frames, feature_size] padded frame
+        sequences.
+      num_frames: [batch_dims...] number of frames.
+
+    Returns:
+      [batch_dims...] shortest distance.
+    """
+    semiring = semirings.Log
+
+    # This function is mostly flax wizardry to make custom_vjp work.
+    #
+    # The high level idea is to call _forward() in fwd() and _backward() in
+    # bwd().
+    #
+    # The tricky part is that flax disallows returning a linen Module as part of
+    # the residuals in fwd() for fear of the Module being mutated in bwd(). To
+    # get around this, we obtain an immutable copy of model parameters in fwd(),
+    # and then call Module.apply with that in bwd, to guarantee that no mutation
+    # to the Module object will occur.
+
+    def f(lattice: 'RecognitionLattice', cache: T, frames: jnp.ndarray):
+      """Normal function evaluation."""
+      log_z, _ = lattice._forward(  # pylint: disable=protected-access
+          cache=cache,
+          frames=frames,
+          num_frames=num_frames,
+          semiring=semiring)
+      return log_z
+
+    def fwd(lattice: 'RecognitionLattice', cache: T, frames: jnp.ndarray):
+      """Forward pass function evaluation."""
+      log_z, alpha_0_to_T_minus_1 = lattice._forward(  # pylint: disable=invalid-name,protected-access
+          cache=cache,
+          frames=frames,
+          num_frames=num_frames,
+          semiring=semiring)
+
+      # jax.tree_util.Partial makes the function an "empty" PyTree so that we
+      # can pass this function as part of res. All this function really does is
+      # keeping a reference to the `lattice` object.
+      @jax.tree_util.Partial
+      def apply_backward(params, **kwargs):
+        # Module.apply is functional so it's safe to call it in the backward
+        # pass.
+        return lattice.apply(params, **kwargs, method=lattice._backward)  # pylint: disable=protected-access
+
+      # Obtain the values of weight function parameters. All parameters have
+      # been created by the time the _forward() call above returns.
+      params = {'params': lattice.variables['params']}
+      res = (apply_backward, params, cache, frames, log_z, alpha_0_to_T_minus_1)
+      return log_z, res
+
+    def bwd(res, g: jnp.ndarray):
+      apply_backward, params, cache, frames, log_z, alpha_0_to_T_minus_1 = res  # pylint: disable=invalid-name
+
+      def vjp_callback(weight_vjp_fn, carry, blank_marginal, lexical_marginals):
+        params_grad, cache_grad = carry
+        params_grad_t, cache_grad_t, frame_grad_t = weight_vjp_fn(
+            (jnp.expand_dims(g, -1) * blank_marginal,
+             jnp.expand_dims(g, (-1, -2)) * lexical_marginals))
+        next_carry = jax.tree_util.tree_map(jnp.add, (params_grad, cache_grad),
+                                            (params_grad_t, cache_grad_t))
+        outputs = frame_grad_t
+        return next_carry, outputs
+
+      # Zero accumulators of params_grad/cache_grad.
+      init_params_grad = jax.tree_util.tree_map(jnp.zeros_like, params)
+      init_cache_grad = jax.tree_util.tree_map(jnp.zeros_like, cache)
+      init_callback_carry = init_params_grad, init_cache_grad
+
+      (params_grad, cache_grad), frames_grad = apply_backward(
+          params,
+          cache=cache,
+          frames=frames,
+          num_frames=num_frames,
+          log_z=log_z,
+          alpha_0_to_T_minus_1=alpha_0_to_T_minus_1,
+          init_callback_carry=init_callback_carry,
+          callback=vjp_callback)
+      return params_grad, cache_grad, frames_grad
+
+    return nn.custom_vjp(f, fwd, bwd)(self, cache, frames)
 
 
 def _init_context_state_weights(

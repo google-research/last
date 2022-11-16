@@ -14,6 +14,8 @@
 
 """Tests for lattices."""
 
+import functools
+
 from absl.testing import absltest
 import jax
 import jax.numpy as jnp
@@ -355,6 +357,126 @@ class RecognitionLatticeCorrectnessTest(absltest.TestCase):
               jax.nn.logsumexp(jnp.array([19, 20, 21])) - 21., 0.
           ],
           rtol=1e-6)
+
+  # Tests for _backward().
+
+  def test_arc_marginals(self):
+    # Test _backward() by computing arc marginals. This is a bit easier to debug
+    # than the full-on forward-backward.
+    vocab_size = 2
+    context_size = 1
+    lattice = last.RecognitionLattice(
+        context=last.contexts.FullNGram(
+            vocab_size=vocab_size, context_size=context_size),
+        alignment=last.alignments.FrameDependent(),
+        weight_fn_cacher_factory=weight_fn_cacher_factory,
+        weight_fn_factory=weight_fn_factory)
+    frames = jax.random.uniform(jax.random.PRNGKey(0), [4, 6, 8])
+    num_frames = jnp.array([6, 3, 2, 0])
+    params = lattice.init(
+        jax.random.PRNGKey(0), frames, num_frames, method=lattice.shortest_path)
+    # For easier application of methods.
+    lattice = lattice.bind(params)
+    del params
+    cache = lattice.build_cache()
+
+    # Compute expected marginals using autodiff.
+    def forward(masks):
+      blank_mask, lexical_mask = masks
+      log_z, _ = lattice._forward(
+          cache=cache,
+          frames=frames,
+          num_frames=num_frames,
+          semiring=last.semirings.Log,
+          blank_mask=[blank_mask],
+          lexical_mask=[lexical_mask])
+      return jnp.sum(log_z)
+
+    num_context_states, _ = lattice.context.shape()
+    blank_mask = jnp.zeros([*frames.shape[:-1], num_context_states])
+    lexical_mask = jnp.zeros(
+        [*frames.shape[:-1], num_context_states, vocab_size])
+    expected_marginals = jax.grad(forward)((blank_mask, lexical_mask))
+
+    # Compute marginals using _backward().
+    def arc_marginals(frames, num_frames):
+
+      def arc_marginals_callback(weight_vjp_fn, carry, blank_marginal,
+                                 lexical_marginals):
+        del weight_vjp_fn
+        del carry
+        next_carry = None
+        outputs = (blank_marginal, lexical_marginals)
+        return next_carry, outputs
+
+      log_z, alpha_0_to_T_minus_1 = lattice._forward(  # pylint: disable=invalid-name
+          cache=cache,
+          frames=frames,
+          num_frames=num_frames,
+          semiring=last.semirings.Log)
+      _, (blank_marginal, lexical_marginals) = lattice._backward(
+          cache=cache,
+          frames=frames,
+          num_frames=num_frames,
+          log_z=log_z,
+          alpha_0_to_T_minus_1=alpha_0_to_T_minus_1,
+          init_callback_carry=None,
+          callback=arc_marginals_callback)
+      return blank_marginal, lexical_marginals
+
+    actual_marginals = arc_marginals(frames, num_frames)
+    jax.tree_util.tree_map(
+        functools.partial(npt.assert_allclose, rtol=1e-3), actual_marginals,
+        expected_marginals)
+
+  def test_forward_backward(self):
+    vocab_size = 2
+    context_size = 1
+    lattice = last.RecognitionLattice(
+        context=last.contexts.FullNGram(
+            vocab_size=vocab_size, context_size=context_size),
+        alignment=last.alignments.FrameDependent(),
+        weight_fn_cacher_factory=weight_fn_cacher_factory,
+        weight_fn_factory=weight_fn_factory)
+    frames = jax.random.uniform(jax.random.PRNGKey(0), [4, 6, 8])
+    num_frames = jnp.array([6, 3, 2, 0])
+    params = lattice.init(
+        jax.random.PRNGKey(0), frames, num_frames, method=lattice.shortest_path)
+
+    def forward(params, frames):
+      cache = lattice.apply(params, method=lattice.build_cache)
+      log_z, _ = lattice.apply(
+          params,
+          cache=cache,
+          frames=frames,
+          num_frames=num_frames,
+          semiring=last.semirings.Log,
+          method=lattice._forward)
+      return log_z
+
+    expected_log_z, expected_vjp_fn = jax.vjp(forward, params, frames)
+
+    def forward_backward(params, frames):
+      cache = lattice.apply(params, method=lattice.build_cache)
+      return lattice.apply(
+          params,
+          cache=cache,
+          frames=frames,
+          num_frames=num_frames,
+          method=lattice._forward_backward)
+
+    actual_log_z, actual_vjp_fn = jax.vjp(forward_backward, params, frames)
+    npt.assert_allclose(actual_log_z, expected_log_z)
+
+    for g in [
+        jnp.ones_like(expected_log_z),
+        jax.random.uniform(jax.random.PRNGKey(0), expected_log_z.shape)
+    ]:
+      expected_grads = expected_vjp_fn(g)
+      actual_grads = actual_vjp_fn(g)
+      jax.tree_util.tree_map(
+          functools.partial(npt.assert_allclose, rtol=1e-3, atol=1e-6),
+          actual_grads, expected_grads)
 
 
 if __name__ == '__main__':
