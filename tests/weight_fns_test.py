@@ -174,13 +174,17 @@ class JointWeightFnTest(absltest.TestCase):
         return jnp.full((*batch_dims, size), pad)
 
     cacher = weight_fns.SharedRNNCacher(
-        vocab_size=3, context_size=2, rnn_size=4, rnn_cell=FakeRNNCell())
+        vocab_size=3,
+        context_size=2,
+        rnn_size=4,
+        rnn_embedding_size=6,
+        rnn_cell=FakeRNNCell())
     params = {
         'params': {
             'Embed_0': {
                 'embedding':
                     jnp.broadcast_to(
-                        jnp.array([start, 1., 2., 3.])[:, jnp.newaxis], (4, 4))
+                        jnp.array([start, 1., 2., 3.])[:, jnp.newaxis], (4, 6))
             }
         }
     }

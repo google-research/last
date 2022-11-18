@@ -27,7 +27,8 @@ def weight_fn_cacher_factory(context: last.contexts.FullNGram):
   return last.weight_fns.SharedRNNCacher(
       vocab_size=context.vocab_size,
       context_size=context.context_size,
-      rnn_size=24)
+      rnn_size=24,
+      rnn_embedding_size=24)
 
 
 def weight_fn_factory(context: last.contexts.ContextDependency):

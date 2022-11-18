@@ -355,7 +355,8 @@ def model_factory(
     return last.weight_fns.SharedRNNCacher(
         vocab_size=context.vocab_size,
         context_size=context.context_size,
-        rnn_size=128)
+        rnn_size=128,
+        rnn_embedding_size=128)
 
   return last.RecognitionLattice(
       context=last.contexts.FullNGram(

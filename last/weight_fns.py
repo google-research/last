@@ -239,6 +239,7 @@ class SharedRNNCacher(WeightFnCacher[jnp.ndarray]):
   vocab_size: int
   context_size: int
   rnn_size: int
+  rnn_embedding_size: int
   # TODO(wuke): Use LSTM with layer norm.
   rnn_cell: nn.recurrent.RNNCellBase = flax.struct.field(
       default_factory=nn.OptimizedLSTMCell)
@@ -251,7 +252,7 @@ class SharedRNNCacher(WeightFnCacher[jnp.ndarray]):
 
     # Label 0 is an extra label for seeding the start state.
     # Labels [1, vocab_size] are the actual lexical labels.
-    embed = nn.Embed(self.vocab_size + 1, self.rnn_size)
+    embed = nn.Embed(self.vocab_size + 1, self.rnn_embedding_size)
     # TODO(wuke): Proper rng handling.
     dummy_rng = jax.random.PRNGKey(0)
     rnn_states, start_embedding = self.rnn_cell(
