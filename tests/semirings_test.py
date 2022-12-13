@@ -303,6 +303,13 @@ class ExpectationTest(absltest.TestCase):
     npt.assert_allclose(jnp.exp(w), [0, 1, 2])
     npt.assert_allclose(jnp.exp(x), [0 * 3, 1 * 4, 2 * 5])
 
+  def test_weighted_safety(self):
+    w = jnp.array(float('-inf'))
+    v = jnp.array(float('inf'))
+    w, x = semirings.LogLogExpectation.weighted(w, v)
+    npt.assert_array_equal(w, float('-inf'))
+    npt.assert_array_equal(x, float('-inf'))
+
   def test_sum(self):
     w, x = semirings.LogLogExpectation.sum(
         semirings.LogLogExpectation.weighted(

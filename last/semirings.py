@@ -335,7 +335,13 @@ class Expectation(Generic[T, S], Semiring[tuple[T, S]]):
   w_to_x: Callable[[T], S]
 
   def weighted(self, w: T, v: S) -> tuple[T, S]:
-    return w, self.x.times(self.w_to_x(w), v)
+    # When w is zero in semiring self.w, self.w_to_x(w) is zero in semiring
+    # self.x. We stipulate that the weighted value should always be zero in
+    # semiring self.x. This is useful for avoiding NaNs when both semirings are
+    # Log and w is -inf and v is +inf (e.g. computing 0 log 0 under Log).
+    w_is_zero = w == self.w.zeros([], w.dtype)
+    safe_v = jnp.where(w_is_zero, 0, v)
+    return w, self.x.times(self.w_to_x(w), safe_v)
 
   def zeros(self,
             shape: Sequence[int],
