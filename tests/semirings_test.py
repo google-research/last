@@ -74,9 +74,9 @@ def zero_and_one_test(semiring):
 class RealTest(absltest.TestCase):
 
   def test_basics(self):
-    self.assertEqual(semirings.Real.times(2, 3), 6)
+    self.assertEqual(semirings.Real.times(2, 3), 6)  # pytype: disable=wrong-arg-types  # jax-ndarray
     self.assertEqual(semirings.Real.prod(jnp.array([2, 3]), axis=0), 6)
-    self.assertEqual(semirings.Real.plus(2, 3), 5)
+    self.assertEqual(semirings.Real.plus(2, 3), 5)  # pytype: disable=wrong-arg-types  # jax-ndarray
     self.assertEqual(semirings.Real.sum(jnp.array([2, 3]), axis=0), 5)
     zero_and_one_test(semirings.Real)
 
@@ -128,9 +128,9 @@ def check_sum_zero_sized(self, semiring):
 class LogTest(absltest.TestCase):
 
   def test_basics(self):
-    self.assertEqual(semirings.Log.times(2, 3), 5)
+    self.assertEqual(semirings.Log.times(2, 3), 5)  # pytype: disable=wrong-arg-types  # jax-ndarray
     self.assertEqual(semirings.Log.prod(jnp.array([2, 3]), axis=0), 5)
-    npt.assert_allclose(semirings.Log.plus(2, 3), 3.31326169)
+    npt.assert_allclose(semirings.Log.plus(2, 3), 3.31326169)  # pytype: disable=wrong-arg-types  # jax-ndarray
     npt.assert_allclose(
         semirings.Log.sum(jnp.array([2, 3]), axis=0), 3.31326169)
     zero_and_one_test(semirings.Log)
@@ -139,8 +139,8 @@ class LogTest(absltest.TestCase):
     inf = jnp.array(jnp.inf)
     self.assertTrue(jnp.isnan(semirings.Log.times(-inf, inf)))
     self.assertTrue(jnp.isnan(semirings.Log.times(inf, -inf)))
-    npt.assert_array_equal(semirings.Log.times(inf, 1), inf)
-    npt.assert_array_equal(semirings.Log.times(1, inf), inf)
+    npt.assert_array_equal(semirings.Log.times(inf, 1), inf)  # pytype: disable=wrong-arg-types  # jax-ndarray
+    npt.assert_array_equal(semirings.Log.times(1, inf), inf)  # pytype: disable=wrong-arg-types  # jax-ndarray
 
   def test_prod_safety(self):
     inf = jnp.array(jnp.inf)
@@ -155,8 +155,8 @@ class LogTest(absltest.TestCase):
     inf = jnp.array(jnp.inf)
     npt.assert_array_equal(semirings.Log.plus(-inf, inf), inf)
     npt.assert_array_equal(semirings.Log.plus(inf, -inf), inf)
-    npt.assert_array_equal(semirings.Log.plus(inf, 1), inf)
-    npt.assert_array_equal(semirings.Log.plus(1, inf), inf)
+    npt.assert_array_equal(semirings.Log.plus(inf, 1), inf)  # pytype: disable=wrong-arg-types  # jax-ndarray
+    npt.assert_array_equal(semirings.Log.plus(1, inf), inf)  # pytype: disable=wrong-arg-types  # jax-ndarray
 
   def test_sum_safety(self):
     inf = jnp.array(jnp.inf)
@@ -249,9 +249,9 @@ class LogTest(absltest.TestCase):
 class MaxTropicalTest(absltest.TestCase):
 
   def test_basics(self):
-    self.assertEqual(semirings.MaxTropical.times(2, 3), 5)
+    self.assertEqual(semirings.MaxTropical.times(2, 3), 5)  # pytype: disable=wrong-arg-types  # jax-ndarray
     self.assertEqual(semirings.MaxTropical.prod(jnp.array([2, 3]), axis=0), 5)
-    self.assertEqual(semirings.MaxTropical.plus(2, 3), 3)
+    self.assertEqual(semirings.MaxTropical.plus(2, 3), 3)  # pytype: disable=wrong-arg-types  # jax-ndarray
     self.assertEqual(semirings.MaxTropical.sum(jnp.array([2, 3]), axis=0), 3)
     zero_and_one_test(semirings.MaxTropical)
 

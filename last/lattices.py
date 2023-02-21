@@ -638,7 +638,7 @@ class RecognitionLattice(nn.Module, Generic[T]):
       blank_marginal = jnp.sum(jnp.stack(blank_marginal), axis=0)
       lexical_marginals = jnp.sum(jnp.stack(lexical_marginals), axis=0)
       # Mask out marginals on padding positions.
-      is_padding = (t >= num_frames)[..., jnp.newaxis]
+      is_padding = (t >= num_frames)[..., jnp.newaxis]  # pytype: disable=unsupported-operands  # jax-ndarray
       next_beta = jnp.where(is_padding, beta, next_beta)
       blank_marginal = jnp.where(is_padding, 0, blank_marginal)
       lexical_marginals = jnp.where(is_padding[..., jnp.newaxis], 0,
