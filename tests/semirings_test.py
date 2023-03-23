@@ -71,6 +71,25 @@ def zero_and_one_test(semiring):
     jax.config.update('jax_debug_nans', False)
 
 
+class SemiringTest(absltest.TestCase):
+
+  def test_value_shape(self):
+    self.assertEqual(semirings.value_shape(jnp.zeros([1, 2])), (1, 2))
+    self.assertEqual(
+        semirings.value_shape({'a': jnp.zeros([1, 2]), 'b': jnp.ones([1, 2])}),
+        (1, 2),
+    )
+    with self.assertRaisesRegex(
+        ValueError, 'No common shape can be derived for an empty PyTree'
+    ):
+      semirings.value_shape(None)
+    with self.assertRaisesRegex(
+        ValueError,
+        'A semiring value must consist of ndarrays of a common shape',
+    ):
+      semirings.value_shape({'a': jnp.zeros([1, 2]), 'b': jnp.ones([2])})
+
+
 class RealTest(absltest.TestCase):
 
   def test_basics(self):
@@ -307,6 +326,14 @@ class ExpectationTest(absltest.TestCase):
         jax.tree_util.tree_map(npt.assert_array_equal,
                                semirings.LogLogExpectation.plus(zero, wx), wx)
 
+  def test_shape_dtypes(self):
+    one = semirings.LogLogExpectation.ones([1, 2], (jnp.float32, jnp.bfloat16))
+    self.assertEqual(semirings.value_shape(one), (1, 2))
+    self.assertEqual(semirings.value_dtype(one), (jnp.float32, jnp.bfloat16))
+    zero = semirings.LogLogExpectation.zeros([], (jnp.bfloat16, jnp.float32))
+    self.assertEqual(semirings.value_shape(zero), ())
+    self.assertEqual(semirings.value_dtype(zero), (jnp.bfloat16, jnp.float32))
+
   def test_weighted(self):
     w, x = semirings.LogLogExpectation.weighted(
         jnp.log(jnp.array([0, 1, 2])), jnp.log(jnp.array([3, 4, 5])))
@@ -349,6 +376,71 @@ class ExpectationTest(absltest.TestCase):
     npt.assert_allclose(
         entropy, -jnp.sum(probs * new_probs * jnp.exp(-log_z) *
                           (log_probs + new_log_probs - log_z)))
+
+
+class CartesianTest(absltest.TestCase):
+
+  def test_basics(self):
+    semiring = semirings.Cartesian(semirings.Real, semirings.MaxTropical)
+    one = semiring.ones([])
+    zero = semiring.zeros([])
+    for wx in [(jnp.array(1.0), jnp.array(2.0)), one, zero]:
+      with self.subTest(str(wx)):
+        jax.tree_util.tree_map(
+            npt.assert_array_equal, semiring.times(wx, one), wx
+        )
+        jax.tree_util.tree_map(
+            npt.assert_array_equal, semiring.times(one, wx), wx
+        )
+        jax.tree_util.tree_map(
+            npt.assert_array_equal, semiring.plus(wx, zero), wx
+        )
+        jax.tree_util.tree_map(
+            npt.assert_array_equal, semiring.plus(zero, wx), wx
+        )
+
+  def test_shape_dtypes(self):
+    semiring = semirings.Cartesian(semirings.Real, semirings.MaxTropical)
+    one = semiring.ones([1, 2], (jnp.float32, jnp.bfloat16))
+    self.assertEqual(semirings.value_shape(one), (1, 2))
+    self.assertEqual(semirings.value_dtype(one), (jnp.float32, jnp.bfloat16))
+    zero = semiring.zeros([], (jnp.bfloat16, jnp.float32))
+    self.assertEqual(semirings.value_shape(zero), ())
+    self.assertEqual(semirings.value_dtype(zero), (jnp.bfloat16, jnp.float32))
+
+  def test_arithmetics(self):
+    semiring = semirings.Cartesian(semirings.Real, semirings.MaxTropical)
+    a = (jnp.array(2.0), jnp.array(1.0))
+    b = (jnp.array(3.0), jnp.array(4.0))
+    c = (jnp.array([1.0, 2.0]), jnp.array([3.0, 4.0]))
+
+    with self.subTest('times'):
+      a_times_b = semiring.times(a, b)
+      self.assertIsInstance(a_times_b, tuple)
+      self.assertLen(a_times_b, 2)
+      npt.assert_array_equal(a_times_b[0], 6.0)
+      npt.assert_array_equal(a_times_b[1], 5.0)
+
+    with self.subTest('plus'):
+      a_plus_b = semiring.plus(a, b)
+      self.assertIsInstance(a_plus_b, tuple)
+      self.assertLen(a_plus_b, 2)
+      npt.assert_array_equal(a_plus_b[0], 5.0)
+      npt.assert_array_equal(a_plus_b[1], 4.0)
+
+    with self.subTest('sum'):
+      sum_c = semiring.sum(c, axis=0)
+      self.assertIsInstance(sum_c, tuple)
+      self.assertLen(sum_c, 2)
+      npt.assert_array_equal(sum_c[0], 3.0)
+      npt.assert_array_equal(sum_c[1], 4.0)
+
+    with self.subTest('prod'):
+      prod_c = semiring.prod(c, axis=0)
+      self.assertIsInstance(prod_c, tuple)
+      self.assertLen(prod_c, 2)
+      npt.assert_array_equal(prod_c[0], 2.0)
+      npt.assert_array_equal(prod_c[1], 7.0)
 
 
 if __name__ == '__main__':

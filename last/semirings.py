@@ -22,10 +22,59 @@ from typing import Any, Callable, Generic, Optional, TypeVar
 import jax
 import jax.numpy as jnp
 
-# Types.
+# Types for documentation purposes.
 DType = Any
+PyTree = Any
+# Type variables for semiring values.
 T = TypeVar('T')
 S = TypeVar('S')
+
+
+def value_shape(x: PyTree) -> tuple[int, ...]:
+  """Obtains the shape of a semiring value.
+
+  A semiring value is a PyTree of one or more identically shaped ndarrays.
+  The shape of a semiring value is thus the common of shape of its leaves.
+
+  Args:
+    x: Some semiring value.
+
+  Returns:
+    The common shape of the leaves of x.
+
+  Raises:
+    ValueError: If the leaves of x do not have a common shape.
+  """
+  shapes = [i.shape for i in jax.tree_util.tree_leaves(x)]
+  if not shapes:
+    raise ValueError(
+        f'No common shape can be derived for an empty PyTree: {x!r}'
+    )
+  result = shapes[0]
+  for i in shapes[1:]:
+    if i != result:
+      raise ValueError(
+          'A semiring value must consist of ndarrays of a common shape. '
+          f'Got inconsistent shapes {result} vs {i} for PyTree: {x!r}'
+      )
+  return result
+
+
+def value_dtype(x: PyTree) -> DType:
+  """Obtains the dtypes of a semiring value.
+
+  Different leaves of a semiring value may have different dtypes. Methods
+  such as Semiring.{zeros,ones} can take a PyTree of dtypes in the same
+  structure as the corresponding semiring values. This function can be used
+  to extract such a dtype PyTree from a semiring value.
+
+  Args:
+    x: Some semiring value.
+
+  Returns:
+    dtypes in the same structure as x.
+  """
+  return jax.tree_util.tree_map(lambda x_: x_.dtype, x)
 
 
 class Semiring(Generic[T]):
@@ -35,23 +84,49 @@ class Semiring(Generic[T]):
   object holds methods that implement the semiring operations. To simplify
   non-semiring operations on the semiring values, the semiring values are not
   typed: for most basic semirings, each value is a single ndarray; for some more
-  complex semirings (e.g. Expectation), the values can be a tuple of ndarrays.
+  complex semirings (e.g. Expectation or Cartesian), the values can be a tuple
+  of ndarrays.
+
+  In general, a semiring value under some semiring is represented as a PyTree
+  of identically shaped ndarrays, with possibly different dtypes. The shape
+  and dtypes of a semiring value can be obtained with methods
+  `last.semirings.value_shape()` and `last.semirings.value_dtype()`.
 
   Semiring is not an abstract base class because we allow operations to be
-  unimplemented.
+  unimplemented (e.g. `prod`, is not commonly used).
 
-  Note: Reductions (prod & sum) can be tricky to implement right, here are two
-  important things to watch out for:
+  Note: Reductions (prod & sum) can be tricky to implement correctly, here are
+  two important things to watch out for:
   *   `axis` can be in the range [-rank, rank).
   *   The input can have 0-sized dimensions.
   """
 
   def zeros(self, shape: Sequence[int], dtype: Optional[DType] = None) -> T:
-    """Semiring zeros in the given shape and dtype."""
+    """Semiring zeros in the given shape and dtype.
+
+    Args:
+      shape: Desired output shape.
+      dtype: Optional PyTree of dtypes.
+
+    Returns:
+      If dtype is None, semiring zero values in the specified shape with
+      reasonable default dtypes. Otherwise, semiring zero values in the
+      specified shape with the specified dtypes.
+    """
     raise NotImplementedError
 
   def ones(self, shape: Sequence[int], dtype: Optional[DType] = None) -> T:
-    """Semiring ones in the given shape and dtype."""
+    """Semiring ones in the given shape and dtype.
+
+    Args:
+      shape: Desired output shape.
+      dtype: Optional PyTree of dtypes.
+
+    Returns:
+      If dtype is None, semiring one values in the specified shape with
+      reasonable default dtypes. Otherwise, semiring one values in the
+      specified shape with the specified dtypes.
+    """
     raise NotImplementedError
 
   def times(self, a: T, b: T) -> T:
@@ -75,7 +150,9 @@ class _Real(Semiring[jnp.ndarray]):
   """Real semiring."""
 
   @staticmethod
-  def zeros(shape: Sequence[int], dtype: Optional[DType] = None) -> jnp.ndarray:
+  def zeros(
+      shape: Sequence[int], dtype: Optional[DType] = None
+  ) -> jnp.ndarray:
     return jnp.zeros(shape, dtype)
 
   @staticmethod
@@ -114,7 +191,9 @@ class _Log(Semiring[jnp.ndarray]):
   """Log semiring."""
 
   @staticmethod
-  def zeros(shape: Sequence[int], dtype: Optional[DType] = None) -> jnp.ndarray:
+  def zeros(
+      shape: Sequence[int], dtype: Optional[DType] = None
+  ) -> jnp.ndarray:
     return jnp.full(shape, -jnp.inf, dtype)
 
   @staticmethod
@@ -233,7 +312,9 @@ class _MaxTropical(Semiring):
   """
 
   @staticmethod
-  def zeros(shape: Sequence[int], dtype: Optional[DType] = None) -> jnp.ndarray:
+  def zeros(
+      shape: Sequence[int], dtype: Optional[DType] = None
+  ) -> jnp.ndarray:
     return jnp.full(shape, -jnp.inf, dtype)
 
   @staticmethod
@@ -343,15 +424,23 @@ class Expectation(Generic[T, S], Semiring[tuple[T, S]]):
     safe_v = jnp.where(w_is_zero, 0, v)
     return w, self.x.times(self.w_to_x(w), safe_v)
 
-  def zeros(self,
-            shape: Sequence[int],
-            dtype: Optional[DType] = None) -> tuple[T, S]:
-    return self.w.zeros(shape, dtype), self.x.zeros(shape, dtype)
+  def zeros(
+      self, shape: Sequence[int], dtype: Optional[DType] = None
+  ) -> tuple[T, S]:
+    if dtype is None:
+      dtype_w = dtype_x = None
+    else:
+      dtype_w, dtype_x = dtype
+    return self.w.zeros(shape, dtype_w), self.x.zeros(shape, dtype_x)
 
-  def ones(self,
-           shape: Sequence[int],
-           dtype: Optional[DType] = None) -> tuple[T, S]:
-    return self.w.ones(shape, dtype), self.x.zeros(shape, dtype)
+  def ones(
+      self, shape: Sequence[int], dtype: Optional[DType] = None
+  ) -> tuple[T, S]:
+    if dtype is None:
+      dtype_w = dtype_x = None
+    else:
+      dtype_w, dtype_x = dtype
+    return self.w.ones(shape, dtype_w), self.x.zeros(shape, dtype_x)
 
   def times(self, a: tuple[T, S], b: tuple[T, S]) -> tuple[T, S]:
     w_a, x_a = a
@@ -379,3 +468,52 @@ class Expectation(Generic[T, S], Semiring[tuple[T, S]]):
 # Expectation semiring with weight and weighted sum represented both using the
 # Log semiring. Therefore only summation on non-negative value is allowed.
 LogLogExpectation = Expectation(w=Log, x=Log, w_to_x=lambda x: x)
+
+
+@dataclasses.dataclass(frozen=True)
+class Cartesian(Generic[T, S], Semiring[tuple[T, S]]):
+  """Cartesian product of 2 semirings.
+
+  Attributes:
+    x: The first semiring.
+    y: The second semiring.
+  """
+
+  x: Semiring[T]
+  y: Semiring[S]
+
+  def zeros(
+      self, shape: Sequence[int], dtype: Optional[DType] = None
+  ) -> tuple[T, S]:
+    if dtype is None:
+      dtype_x = dtype_y = None
+    else:
+      dtype_x, dtype_y = dtype
+    return self.x.zeros(shape, dtype_x), self.y.zeros(shape, dtype_y)
+
+  def ones(
+      self, shape: Sequence[int], dtype: Optional[DType] = None
+  ) -> tuple[T, S]:
+    if dtype is None:
+      dtype_x = dtype_y = None
+    else:
+      dtype_x, dtype_y = dtype
+    return self.x.ones(shape, dtype_x), self.y.ones(shape, dtype_y)
+
+  def times(self, a: tuple[T, S], b: tuple[T, S]) -> tuple[T, S]:
+    a_x, a_y = a
+    b_x, b_y = b
+    return self.x.times(a_x, b_x), self.y.times(a_y, b_y)
+
+  def plus(self, a: tuple[T, S], b: tuple[T, S]) -> tuple[T, S]:
+    a_x, a_y = a
+    b_x, b_y = b
+    return self.x.plus(a_x, b_x), self.y.plus(a_y, b_y)
+
+  def sum(self, a: tuple[T, S], axis: int) -> tuple[T, S]:
+    a_x, a_y = a
+    return self.x.sum(a_x, axis), self.y.sum(a_y, axis)
+
+  def prod(self, a: tuple[T, S], axis: int) -> tuple[T, S]:
+    a_x, a_y = a
+    return self.x.prod(a_x, axis), self.y.prod(a_y, axis)
