@@ -1,4 +1,4 @@
-# Copyright 2022 The LAST Authors.
+# Copyright 2023 The LAST Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 """Tests for weight_fns."""
 
 from absl.testing import absltest
+import flax
 from flax import linen as nn
 import jax
 import jax.numpy as jnp
@@ -47,7 +48,7 @@ class WeightFnTest(absltest.TestCase):
     cacher = weight_fns.NullCacher()
     cache, params = cacher.init_with_output(jax.random.PRNGKey(0))
     self.assertIsNone(cache)
-    self.assertDictEqual(params.unfreeze(), {})
+    self.assertDictEqual(flax.core.unfreeze(params), {})
 
   def test_TableWeightFn(self):
     with self.subTest('batch ndim = 0'):
@@ -57,7 +58,7 @@ class WeightFnTest(absltest.TestCase):
       frame = jnp.array([1., 2.])
       (blank, lexical), params = weight_fn.init_with_output(
           jax.random.PRNGKey(0), None, frame)
-      self.assertDictEqual(params.unfreeze(), {})
+      self.assertDictEqual(flax.core.unfreeze(params), {})
       npt.assert_array_equal(blank, table[1, :, 0])
       npt.assert_array_equal(lexical, table[1, :, 1:])
 
@@ -77,7 +78,7 @@ class WeightFnTest(absltest.TestCase):
       frame = jnp.array([[1., 2.], [4., 3.]])
       (blank, lexical), params = weight_fn.init_with_output(
           jax.random.PRNGKey(0), None, frame)
-      self.assertDictEqual(params.unfreeze(), {})
+      self.assertDictEqual(flax.core.unfreeze(params), {})
       npt.assert_array_equal(blank, [table[0, 1, :, 0], table[1, 4, :, 0]])
       npt.assert_array_equal(lexical, [table[0, 1, :, 1:], table[1, 4, :, 1:]])
 
