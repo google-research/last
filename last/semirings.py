@@ -95,10 +95,18 @@ class Semiring(Generic[T]):
   Semiring is not an abstract base class because we allow operations to be
   unimplemented (e.g. `prod`, is not commonly used).
 
-  Note: Reductions (prod & sum) can be tricky to implement correctly, here are
-  two important things to watch out for:
-  *   `axis` can be in the range [-rank, rank).
-  *   The input can have 0-sized dimensions.
+  Implementation tips:
+  *   Binary operations (times & plus) should support broadcasting. If a binary
+      operation requires a custom vjp implementation, it may not be straight-
+      forward to write one that handles input broadcasting properly. Instead,
+      write a custom vjp function that requires inputs with identical shapes,
+      then use `jnp.broadcast_arrays()` to preprocess the operands in the
+      implementation of the semiring operations. See `{_Log,_MaxTropical}.plus`
+      for examples.
+  *   Reductions (prod & sum) can be tricky to implement correctly, here are
+      two important things to watch out for:
+      *   `axis` can be in the range [-rank, rank).
+      *   The input can have 0-sized dimensions.
   """
 
   def zeros(self, shape: Sequence[int], dtype: Optional[DType] = None) -> T:
@@ -206,6 +214,7 @@ class _Log(Semiring[jnp.ndarray]):
 
   @staticmethod
   def plus(a: jnp.ndarray, b: jnp.ndarray) -> jnp.ndarray:
+    a, b = jnp.broadcast_arrays(a, b)
     return _logaddexp(a, b)
 
   @staticmethod
@@ -327,6 +336,7 @@ class _MaxTropical(Semiring):
 
   @staticmethod
   def plus(a: jnp.ndarray, b: jnp.ndarray) -> jnp.ndarray:
+    a, b = jnp.broadcast_arrays(a, b)
     return _maximum(a, b)
 
   @staticmethod

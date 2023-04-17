@@ -71,6 +71,35 @@ def zero_and_one_test(semiring):
     jax.config.update('jax_debug_nans', False)
 
 
+def binary_op_broadcasting_test(semiring):
+
+  def expected(op, x, y):
+    expected_z, expected_vjp_fn = jax.vjp(
+        lambda x, y: op(*jnp.broadcast_arrays(x, y)), x, y
+    )
+    expected_dx, expected_dy = expected_vjp_fn(jnp.ones_like(expected_z))
+    return expected_z, expected_dx, expected_dy
+
+  for op in [semiring.times, semiring.plus]:
+    for shapes in [
+        ([], [2]),
+        ([1], [2]),
+        ([1, 2], [3, 2]),
+        ([2, 1], [2, 3]),
+        ([3], [2, 3]),
+    ]:
+      for shape_x, shape_y in [shapes, shapes[::-1]]:
+        err_msg = f'op={op} shapes={(shape_x, shape_y)}'
+        x = semiring.ones(shape_x)
+        y = semiring.ones(shape_y)
+        z, vjp_fn = jax.vjp(op, x, y)
+        dx, dy = vjp_fn(jnp.ones_like(z))
+        expected_z, expected_dx, expected_dy = expected(op, x, y)
+        npt.assert_allclose(z, expected_z, err_msg=err_msg)
+        npt.assert_allclose(dx, expected_dx, err_msg=err_msg)
+        npt.assert_allclose(dy, expected_dy, err_msg=err_msg)
+
+
 class SemiringTest(absltest.TestCase):
 
   def test_value_shape(self):
@@ -98,6 +127,7 @@ class RealTest(absltest.TestCase):
     npt.assert_array_equal(semirings.Real.plus(jnp.array(2), jnp.array(3)), 5)
     npt.assert_array_equal(semirings.Real.sum(jnp.array([2, 3]), axis=0), 5)
     zero_and_one_test(semirings.Real)
+    binary_op_broadcasting_test(semirings.Real)
 
 
 def check_sum_axis(self, semiring):
@@ -155,6 +185,7 @@ class LogTest(absltest.TestCase):
     npt.assert_allclose(
         semirings.Log.sum(jnp.array([2, 3]), axis=0), 3.31326169)
     zero_and_one_test(semirings.Log)
+    binary_op_broadcasting_test(semirings.Log)
 
   def test_times_safety(self):
     inf = jnp.array(jnp.inf)
@@ -283,6 +314,7 @@ class MaxTropicalTest(absltest.TestCase):
         semirings.MaxTropical.sum(jnp.array([2, 3]), axis=0), 3
     )
     zero_and_one_test(semirings.MaxTropical)
+    binary_op_broadcasting_test(semirings.MaxTropical)
 
   def test_plus_grad(self):
     npt.assert_array_equal(
