@@ -259,11 +259,14 @@ class SharedRNNCacher(WeightFnCacher[jnp.ndarray]):
         self.rnn_cell.initialize_carry(dummy_rng, (1,), self.rnn_size),
         embed(jnp.array([0])))
     parts = [start_embedding]
-    inputs = embed(jnp.arange(1, self.vocab_size + 1))
-    for _ in range(self.context_size):
+    for i in range(self.context_size):
+      if i == 0:
+        inputs = embed(jnp.arange(1, self.vocab_size + 1))
+      else:
+        inputs = einops.repeat(inputs, 'n ... -> (v n) ...', v=self.vocab_size)
       rnn_states, embeddings = self.rnn_cell(
-          jax.tree_util.tree_map(tile_rnn_state, rnn_states), inputs)
-      inputs = einops.repeat(inputs, 'n ... -> (v n) ...', v=self.vocab_size)
+          jax.tree_util.tree_map(tile_rnn_state, rnn_states), inputs
+      )
       parts.append(embeddings)
     return jnp.concatenate(parts, axis=0)
 

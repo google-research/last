@@ -174,42 +174,58 @@ class JointWeightFnTest(absltest.TestCase):
         del rng
         return jnp.full((*batch_dims, size), pad)
 
-    cacher = weight_fns.SharedRNNCacher(
-        vocab_size=3,
-        context_size=2,
-        rnn_size=4,
-        rnn_embedding_size=6,
-        rnn_cell=FakeRNNCell())
     params = {
         'params': {
             'Embed_0': {
-                'embedding':
-                    jnp.broadcast_to(
-                        jnp.array([start, 1., 2., 3.])[:, jnp.newaxis], (4, 6))
+                'embedding': jnp.broadcast_to(
+                    jnp.array([start, 1.0, 2.0, 3.0])[:, jnp.newaxis], (4, 6)
+                )
             }
         }
     }
-    npt.assert_array_equal(
-        cacher.apply(params),
-        [
-            # Start.
-            [pad, pad, pad, start],
-            # Unigrams.
-            [pad, pad, start, 1],
-            [pad, pad, start, 2],
-            [pad, pad, start, 3],
-            # Bigrams.
-            [pad, start, 1, 1],
-            [pad, start, 1, 2],
-            [pad, start, 1, 3],
-            [pad, start, 2, 1],
-            [pad, start, 2, 2],
-            [pad, start, 2, 3],
-            [pad, start, 3, 1],
-            [pad, start, 3, 2],
-            [pad, start, 3, 3],
-        ])
 
+    with self.subTest('context_size=2'):
+      cacher = weight_fns.SharedRNNCacher(
+          vocab_size=3,
+          context_size=2,
+          rnn_size=4,
+          rnn_embedding_size=6,
+          rnn_cell=FakeRNNCell(),
+      )
+      npt.assert_array_equal(
+          cacher.apply(params),
+          [
+              # Start.
+              [pad, pad, pad, start],
+              # Unigrams.
+              [pad, pad, start, 1],
+              [pad, pad, start, 2],
+              [pad, pad, start, 3],
+              # Bigrams.
+              [pad, start, 1, 1],
+              [pad, start, 1, 2],
+              [pad, start, 1, 3],
+              [pad, start, 2, 1],
+              [pad, start, 2, 2],
+              [pad, start, 2, 3],
+              [pad, start, 3, 1],
+              [pad, start, 3, 2],
+              [pad, start, 3, 3],
+          ],
+      )
+
+    with self.subTest('context_size=0'):
+      cacher = weight_fns.SharedRNNCacher(
+          vocab_size=3,
+          context_size=0,
+          rnn_size=4,
+          rnn_embedding_size=6,
+          rnn_cell=FakeRNNCell(),
+      )
+      npt.assert_array_equal(
+          cacher.apply(params),
+          [[pad, pad, pad, start]],
+      )
 
 if __name__ == '__main__':
   absltest.main()
