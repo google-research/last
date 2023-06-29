@@ -16,7 +16,7 @@
 
 from absl.testing import absltest
 import flax
-from flax import linen as nn
+import flax.linen as nn
 import jax
 import jax.numpy as jnp
 from last import weight_fns
@@ -162,17 +162,22 @@ class JointWeightFnTest(absltest.TestCase):
     pad = -2.
     start = -1.
 
-    class FakeRNNCell(nn.recurrent.RNNCellBase):
+    class FakeRNNCell(nn.RNNCellBase):
       """Test RNN cell that remembers past inputs."""
+      features: int
+
+      @property
+      def num_feature_axes(self):
+        return 1
 
       def __call__(self, carry, inputs):
         carry = jnp.concatenate([carry[..., 1:], inputs[..., :1]], axis=-1)
         return carry, carry
 
-      @staticmethod
-      def initialize_carry(rng, batch_dims, size):
+      def initialize_carry(self, rng, input_shape):
+        batch_dims = input_shape[:-1]
         del rng
-        return jnp.full((*batch_dims, size), pad)
+        return jnp.full((*batch_dims, self.features), pad)
 
     params = {
         'params': {
@@ -190,7 +195,7 @@ class JointWeightFnTest(absltest.TestCase):
           context_size=2,
           rnn_size=4,
           rnn_embedding_size=6,
-          rnn_cell=FakeRNNCell(),
+          rnn_cell=FakeRNNCell(features=4),
       )
       npt.assert_array_equal(
           cacher.apply(params),
@@ -220,7 +225,7 @@ class JointWeightFnTest(absltest.TestCase):
           context_size=0,
           rnn_size=4,
           rnn_embedding_size=6,
-          rnn_cell=FakeRNNCell(),
+          rnn_cell=FakeRNNCell(features=4),
       )
       npt.assert_array_equal(
           cacher.apply(params),

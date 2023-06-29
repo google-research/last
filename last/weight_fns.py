@@ -19,7 +19,6 @@ from typing import Callable, Generic, Optional, TypeVar
 
 import einops
 from flax import linen as nn
-import flax.struct
 import jax
 import jax.numpy as jnp
 
@@ -241,11 +240,14 @@ class SharedRNNCacher(WeightFnCacher[jnp.ndarray]):
   rnn_size: int
   rnn_embedding_size: int
   # TODO(wuke): Use LSTM with layer norm.
-  rnn_cell: nn.recurrent.RNNCellBase = flax.struct.field(
-      default_factory=nn.OptimizedLSTMCell)
+  rnn_cell: Optional[nn.RNNCellBase] = None
 
   @nn.compact
   def __call__(self) -> jnp.ndarray:
+    if self.rnn_cell is None:
+      rnn_cell = nn.OptimizedLSTMCell(self.rnn_size, name='rnn_cell')
+    else:
+      rnn_cell = self.rnn_cell
 
     def tile_rnn_state(state):
       return einops.repeat(state, 'n ... -> (n v) ...', v=self.vocab_size)
@@ -255,16 +257,18 @@ class SharedRNNCacher(WeightFnCacher[jnp.ndarray]):
     embed = nn.Embed(self.vocab_size + 1, self.rnn_embedding_size)
     # TODO(wuke): Proper rng handling.
     dummy_rng = jax.random.PRNGKey(0)
-    rnn_states, start_embedding = self.rnn_cell(
-        self.rnn_cell.initialize_carry(dummy_rng, (1,), self.rnn_size),
-        embed(jnp.array([0])))
+    rnn_states, start_embedding = rnn_cell(
+        rnn_cell.initialize_carry(dummy_rng, (1, self.rnn_size)),
+        embed(jnp.array([0])),
+    )
     parts = [start_embedding]
+    inputs = None
     for i in range(self.context_size):
       if i == 0:
         inputs = embed(jnp.arange(1, self.vocab_size + 1))
       else:
         inputs = einops.repeat(inputs, 'n ... -> (v n) ...', v=self.vocab_size)
-      rnn_states, embeddings = self.rnn_cell(
+      rnn_states, embeddings = rnn_cell(
           jax.tree_util.tree_map(tile_rnn_state, rnn_states), inputs
       )
       parts.append(embeddings)
