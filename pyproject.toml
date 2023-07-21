@@ -17,7 +17,7 @@ keywords = ["speech", "jax"]
 # pip dependencies of the project
 dependencies = [
   "einops>=0.5.0",
-  "flax>=0.6.1",
+  "flax>=0.7.0",
   "jax>=0.3.21",
 ]
 
