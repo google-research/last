@@ -251,7 +251,7 @@ class LogTest(absltest.TestCase):
 
       @jax.grad
       def f(x):
-        return semirings.Log.plus(-jnp.inf, semirings.Log.times(-jnp.inf, x))
+        return semirings.Log.plus(-jnp.inf, semirings.Log.times(-jnp.inf, x))  # pytype: disable=wrong-arg-types  # jnp-type
 
       self.assertEqual(f(1.), 0.)
 
