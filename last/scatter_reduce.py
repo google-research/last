@@ -18,9 +18,10 @@ Temporarily here while https://github.com/google/jax/pull/12004 is under review.
 """
 
 # pylint: skip-file
-# pytype: skip-file
+from typing import Callable, Optional, Union
+
 from jax._src.lax.slicing import *
-from jax._src.lax.slicing import _argnum_weak_type, _scatter_dtype_rule, _scatter_lower, _scatter_shape_rule
+from jax._src.lax.slicing import _argnum_weak_type, _scatter_batching_rule, _scatter_dtype_rule, _scatter_lower, _scatter_shape_rule
 
 
 def scatter_reduce(
