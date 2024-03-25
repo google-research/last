@@ -16,9 +16,9 @@ keywords = ["speech", "jax"]
 
 # pip dependencies of the project
 dependencies = [
-  "einops>=0.5.0",
-  "flax>=0.7.0",
-  "jax>=0.3.21",
+  "einops>=0.7.0",
+  "flax>=0.8.2",
+  "jax>=0.4.25",
 ]
 
 # This is set automatically by flit using `last.__version__`

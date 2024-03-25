@@ -1,4 +1,4 @@
-# Copyright 2023 The LAST Authors.
+# Copyright 2024 The LAST Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,4 +21,4 @@ from last import weight_fns
 from last.lattices import RecognitionLattice
 
 # A new PyPI release will be pushed everytime `__version__` is increased.
-__version__ = '0.0.3'
+__version__ = '0.0.4'
