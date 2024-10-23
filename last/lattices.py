@@ -478,6 +478,8 @@ class RecognitionLattice(nn.Module, Generic[T]):
     #
     # For the tropical semiring, this should be equivalent to no remat.
     def save_small(prim, *args, **params):
+      if prim.multiple_results:
+        return False
       y, _ = prim.abstract_eval(*args, **params)
       greater_than_1_dims = len([None for i in y.shape if i > 1])
       save = greater_than_1_dims <= (len(batch_dims) + 1)
