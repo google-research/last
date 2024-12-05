@@ -14,7 +14,7 @@
 
 """A custom JAX primitive for emitting XLA scatter ops with a custom reducer.
 
-Temporarily here while https://github.com/google/jax/pull/12004 is under review.
+Temporarily here while https://github.com/jax-ml/jax/pull/12004 is under review.
 """
 
 # pylint: skip-file
