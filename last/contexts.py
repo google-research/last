@@ -20,7 +20,6 @@ import dataclasses
 import jax
 import jax.numpy as jnp
 
-from last import scatter_reduce
 from last import semirings
 
 
@@ -251,72 +250,3 @@ class FullNGram(ContextDependency):
     return self.next_state(
         jnp.arange(num_states)[:, jnp.newaxis],
         jnp.arange(vocab_size)[jnp.newaxis, :] + 1)
-
-
-@dataclasses.dataclass(frozen=True)
-class NextStateTable(ContextDependency):
-  """Context dependency described as a transition lookup table.
-
-  Attributes:
-    next_state_table: [num_states, vocab_size] int32 array. next_state_table[p,
-      y - 1] is the state reached from p with label y.
-  """
-  next_state_table: jnp.ndarray
-
-  def __post_init__(self):
-    if self.next_state_table.ndim != 2:
-      raise ValueError(
-          'next_state_table should have shape [num_states, vocab_size], but'
-          f'got shape {self.next_state_table.shape}')
-    if self.next_state_table.size == 0:
-      raise ValueError('next_state_table should have a non-zero size, but '
-                       f'got shape {self.next_state_table.shape}')
-    if self.next_state_table.dtype != jnp.int32:
-      raise ValueError('next_state_table should be an int32 ndarray, but '
-                       f'got dtype {self.next_state_table.dtype}')
-
-  def shape(self) -> tuple[int, int]:
-    return self.next_state_table.shape
-
-  def start(self) -> int:
-    return 0
-
-  def next_state(self, state: jnp.ndarray, label: jnp.ndarray) -> jnp.ndarray:
-    # Note: lexical labels are in the range [1, vocab_size].
-    is_epsilon = label == 0
-    zero_based_label = jnp.where(is_epsilon, 0, label - 1)
-    nextstate = self.next_state_table[state, zero_based_label]
-    # Remain where we were for epsilons.
-    nextstate = jnp.where(is_epsilon, state, nextstate)
-    return nextstate
-
-  def forward_reduce(self, weights: jnp.ndarray,
-                     semiring: semirings.Semiring[jnp.ndarray]) -> jnp.ndarray:
-    batch_dims = weights.shape[:-2]
-    if weights.shape[-2:] != self.shape():
-      raise ValueError(f'weights.shape[-2:] should be {self.shape()} but got'
-                       f' {weights.shape[-2:]}')
-    num_states, _ = self.shape()
-    # Build the scatter operation.
-    operand = semiring.zeros(batch_dims + (num_states,), weights.dtype)
-    updates = weights
-    scatter_indices = jnp.expand_dims(self.next_state_table, axis=-1)
-    update_window_dims = tuple(range(len(batch_dims)))
-    inserted_window_dims = (len(batch_dims),)
-    scatter_dims_to_operand_dims = (len(batch_dims),)
-    return scatter_reduce.scatter_reduce(
-        operand=operand,
-        scatter_indices=scatter_indices,
-        updates=updates,
-        computation=semiring.plus,
-        dimension_numbers=jax.lax.ScatterDimensionNumbers(
-            update_window_dims=update_window_dims,
-            inserted_window_dims=inserted_window_dims,
-            scatter_dims_to_operand_dims=scatter_dims_to_operand_dims))
-
-  def backward_broadcast(self, weights: jnp.ndarray) -> jnp.ndarray:
-    num_states = weights.shape[-1]
-    if num_states != self.shape()[0]:
-      raise ValueError(f'weights.shape[-1] should be {self.shape()[0]} but '
-                       f'got {num_states}')
-    return weights[..., self.next_state_table]
