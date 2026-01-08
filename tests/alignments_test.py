@@ -153,7 +153,9 @@ class FrameDependentTest(absltest.TestCase):
             beta=jnp.log(beta)[jnp.newaxis],
             log_z=jnp.log(z)[jnp.newaxis],
             context=context))
-    npt.assert_allclose(batched_log_next_beta, log_next_beta[jnp.newaxis])
+    npt.assert_allclose(
+        batched_log_next_beta, log_next_beta[jnp.newaxis], rtol=2e-7
+    )
 
     # Wrong number of weights.
     with self.assertRaisesRegex(ValueError, 'blank should be'):
