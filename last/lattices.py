@@ -1,4 +1,4 @@
-# Copyright 2025 The LAST Authors.
+# Copyright 2026 The LAST Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -558,8 +558,9 @@ class RecognitionLattice(nn.Module, Generic[T]):
       num_frames: jnp.ndarray,
       log_z: jnp.ndarray,
       alpha_0_to_T_minus_1: jnp.ndarray,  # pylint: disable=invalid-name
-      init_callback_carry: ...,
-      callback: BackwardStepCallback) -> tuple[Any, Any]:
+      init_callback_carry,
+      callback: BackwardStepCallback,
+  ) -> tuple[Any, Any]:
     """Computes arc marginals under the log semiring using the backward algorithm.
 
     Under the log semiring, arc weights can be viewed as unnormalized log
