@@ -430,9 +430,9 @@ class Expectation(Generic[T, S], Semiring[tuple[T, S]]):
     # self.x. We stipulate that the weighted value should always be zero in
     # semiring self.x. This is useful for avoiding NaNs when both semirings are
     # Log and w is -inf and v is +inf (e.g. computing 0 log 0 under Log).
-    w_is_zero = w == self.w.zeros([], w.dtype)
-    safe_v = jnp.where(w_is_zero, 0, v)
-    return w, self.x.times(self.w_to_x(w), safe_v)
+    w_is_zero = w == self.w.zeros([], w.dtype)  # pyrefly: ignore[missing-attribute]
+    safe_v = jnp.where(w_is_zero, 0, v)  # pyrefly: ignore[bad-argument-type]
+    return w, self.x.times(self.w_to_x(w), safe_v)  # pyrefly: ignore[bad-argument-type]
 
   def zeros(
       self, shape: Sequence[int], dtype: Optional[DType] = None

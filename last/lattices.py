@@ -514,13 +514,13 @@ class RecognitionLattice(nn.Module, Generic[T]):
 
     # Type names.
     # pylint: disable=invalid-name
-    Blank = jnp.ndarray
-    Lexical = jnp.ndarray
-    ParamsGrad = Any
-    CacheGrad = Any
-    FrameGrad = jnp.ndarray
+    Blank = jnp.ndarray  # pyrefly: ignore[unannotated-protocol-member]
+    Lexical = jnp.ndarray  # pyrefly: ignore[unannotated-protocol-member]
+    ParamsGrad = Any  # pyrefly: ignore[unannotated-protocol-member]
+    CacheGrad = Any  # pyrefly: ignore[unannotated-protocol-member]
+    FrameGrad = jnp.ndarray  # pyrefly: ignore[unannotated-protocol-member]
     Carry = TypeVar('Carry')
-    Output = Any
+    Output = Any  # pyrefly: ignore[unannotated-protocol-member]
     # pylint: enable=invalid-name
 
     def __call__(self, weight_vjp_fn: Callable[[Blank, Lexical],
@@ -636,7 +636,7 @@ class RecognitionLattice(nn.Module, Generic[T]):
           lexical=lexical,
           beta=beta,
           log_z=log_z,
-          context=self.context)
+          context=self.context)  # pyrefly: ignore[bad-argument-type]
       # We currently only support alignment-state-invariant weights.
       blank_marginal = jnp.sum(jnp.stack(blank_marginal), axis=0)
       lexical_marginals = jnp.sum(jnp.stack(lexical_marginals), axis=0)

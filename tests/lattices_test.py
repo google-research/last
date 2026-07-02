@@ -45,7 +45,7 @@ class RecognitionLatticeBasicsTest(absltest.TestCase):
         context=last.contexts.FullNGram(
             vocab_size=vocab_size, context_size=context_size),
         alignment=last.alignments.FrameDependent(),
-        weight_fn_cacher_factory=weight_fn_cacher_factory,
+        weight_fn_cacher_factory=weight_fn_cacher_factory,  # pyrefly: ignore[bad-argument-type]
         weight_fn_factory=weight_fn_factory)
     frames = jax.random.normal(jax.random.PRNGKey(0), [4, 6, 8])
     num_frames = jnp.array([6, 3, 2, 0])
@@ -88,7 +88,7 @@ class RecognitionLatticeBasicsTest(absltest.TestCase):
         context=last.contexts.FullNGram(
             vocab_size=vocab_size, context_size=context_size),
         alignment=last.alignments.FrameDependent(),
-        weight_fn_cacher_factory=weight_fn_cacher_factory,
+        weight_fn_cacher_factory=weight_fn_cacher_factory,  # pyrefly: ignore[bad-argument-type]
         weight_fn_factory=weight_fn_factory)
     frames = jax.random.normal(jax.random.PRNGKey(0), [4, 6, 8])
     num_frames = jnp.array([6, 3, 2, 1])
@@ -109,7 +109,7 @@ class RecognitionLatticeBasicsTest(absltest.TestCase):
           num_frames=num_frames,
           labels=jnp.pad(labels, [(0, 0), (0, 2)]),
           num_labels=num_labels)
-      npt.assert_allclose(loss_with_padded_inputs, loss)
+      npt.assert_allclose(loss_with_padded_inputs, loss)  # pyrefly: ignore[no-matching-overload]
 
     with self.subTest('invalid shapes'):
       with self.assertRaisesRegex(
@@ -144,7 +144,7 @@ class RecognitionLatticeBasicsTest(absltest.TestCase):
         context=last.contexts.FullNGram(
             vocab_size=vocab_size, context_size=context_size),
         alignment=last.alignments.FrameDependent(),
-        weight_fn_cacher_factory=weight_fn_cacher_factory,
+        weight_fn_cacher_factory=weight_fn_cacher_factory,  # pyrefly: ignore[bad-argument-type]
         weight_fn_factory=weight_fn_factory)
     frames = jax.random.normal(jax.random.PRNGKey(0), [4, 6, 8])
     num_frames = jnp.array([6, 3, 2, 0])
@@ -180,7 +180,7 @@ class RecognitionLatticeBasicsTest(absltest.TestCase):
           err_msg=f'path_weights={path_weights!r}')
 
     with self.subTest('padded inputs'):
-      (_, _, path_weights_with_padded_inputs) = lattice.apply(
+      (_, _, path_weights_with_padded_inputs) = lattice.apply(  # pyrefly: ignore[bad-unpacking]
           params,
           jnp.pad(frames, [(0, 0), (0, 1), (0, 0)]),
           num_frames,
@@ -200,7 +200,7 @@ class RecognitionLatticeBasicsTest(absltest.TestCase):
         context=last.contexts.FullNGram(
             vocab_size=vocab_size, context_size=context_size),
         alignment=last.alignments.FrameLabelDependent(max_expansions=2),
-        weight_fn_cacher_factory=weight_fn_cacher_factory,
+        weight_fn_cacher_factory=weight_fn_cacher_factory,  # pyrefly: ignore[bad-argument-type]
         weight_fn_factory=weight_fn_factory)
     frames = jax.random.normal(jax.random.PRNGKey(0), [4, 6, 8])
     num_frames = jnp.array([6, 3, 2, 1])
@@ -215,11 +215,11 @@ class RecognitionLatticeBasicsTest(absltest.TestCase):
           num_labels=num_labels)
       npt.assert_array_equal(jnp.isfinite(loss), [True, True, True, False])
     with self.subTest('shortest_path'):
-      alignment_labels, num_alignment_labels, path_weights = (
+      alignment_labels, num_alignment_labels, path_weights = (  # pyrefly: ignore[bad-unpacking]
           lattice.apply(
               params, frames, num_frames, method=lattice.shortest_path))
       npt.assert_array_equal(num_alignment_labels, 3 * num_frames)
-      is_padding = jnp.arange(18) >= num_alignment_labels[:, jnp.newaxis]
+      is_padding = jnp.arange(18) >= num_alignment_labels[:, jnp.newaxis]  # pyrefly: ignore[bad-index]
       npt.assert_array_equal(
           jnp.where(is_padding, alignment_labels, -1), [
               [-1] * 18,
@@ -294,7 +294,7 @@ class RecognitionLatticeCorrectnessTest(absltest.TestCase):
     ]:
       semiring = getattr(last.semirings, semiring_name)
       with self.subTest(f'forward/{semiring_name}'):
-        npt.assert_allclose(
+        npt.assert_allclose(  # pyrefly: ignore[no-matching-overload]
             lattice._forward(
                 cache=None,
                 frames=frames,
@@ -323,7 +323,7 @@ class RecognitionLatticeCorrectnessTest(absltest.TestCase):
     ]:
       semiring = getattr(last.semirings, semiring_name)
       with self.subTest(f'string_forward/{semiring_name}'):
-        npt.assert_allclose(
+        npt.assert_allclose(  # pyrefly: ignore[no-matching-overload]
             lattice._string_forward(
                 cache=None,
                 frames=frames,
@@ -348,7 +348,7 @@ class RecognitionLatticeCorrectnessTest(absltest.TestCase):
           labels=labels,
           num_labels=num_labels,
           cache=None)
-      npt.assert_allclose(
+      npt.assert_allclose(  # pyrefly: ignore[no-matching-overload]
           log_loss, [
               jax.nn.logsumexp(
                   jnp.array([
@@ -370,7 +370,7 @@ class RecognitionLatticeCorrectnessTest(absltest.TestCase):
         context=last.contexts.FullNGram(
             vocab_size=vocab_size, context_size=context_size),
         alignment=last.alignments.FrameDependent(),
-        weight_fn_cacher_factory=weight_fn_cacher_factory,
+        weight_fn_cacher_factory=weight_fn_cacher_factory,  # pyrefly: ignore[bad-argument-type]
         weight_fn_factory=weight_fn_factory)
     frames = jax.random.uniform(jax.random.PRNGKey(0), [4, 6, 8])
     num_frames = jnp.array([6, 3, 2, 0])
@@ -422,7 +422,7 @@ class RecognitionLatticeCorrectnessTest(absltest.TestCase):
           log_z=log_z,
           alpha_0_to_T_minus_1=alpha_0_to_T_minus_1,
           init_callback_carry=None,
-          callback=arc_marginals_callback)
+          callback=arc_marginals_callback)  # pyrefly: ignore[bad-argument-type]
       return blank_marginal, lexical_marginals
 
     actual_marginals = arc_marginals(frames, num_frames)
@@ -437,7 +437,7 @@ class RecognitionLatticeCorrectnessTest(absltest.TestCase):
         context=last.contexts.FullNGram(
             vocab_size=vocab_size, context_size=context_size),
         alignment=last.alignments.FrameDependent(),
-        weight_fn_cacher_factory=weight_fn_cacher_factory,
+        weight_fn_cacher_factory=weight_fn_cacher_factory,  # pyrefly: ignore[bad-argument-type]
         weight_fn_factory=weight_fn_factory)
     frames = jax.random.uniform(jax.random.PRNGKey(0), [4, 6, 8])
     num_frames = jnp.array([6, 3, 2, 0])

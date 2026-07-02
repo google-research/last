@@ -49,7 +49,7 @@ def run_toy_task(data_iter: Iterator[Any],
 
     def loss_fn(params):
       return jnp.mean(
-          lattice.apply(
+          lattice.apply(  # pyrefly: ignore[bad-argument-type]
               params,
               frames=frames,
               num_frames=num_frames,
@@ -64,7 +64,7 @@ def run_toy_task(data_iter: Iterator[Any],
   @jax.jit
   def eval_step(params, batch):
     ilabels, frames, num_frames, labels, num_labels = batch
-    alignment_labels, _, path_weights = lattice.apply(
+    alignment_labels, _, path_weights = lattice.apply(  # pyrefly: ignore[bad-unpacking]
         params,
         frames=frames,
         num_frames=num_frames,
@@ -362,8 +362,8 @@ def model_factory(
       context=last.contexts.FullNGram(
           vocab_size=VOCAB_SIZE, context_size=context_size),
       alignment=alignment,
-      weight_fn_cacher_factory=weight_fn_cacher_factory,
-      weight_fn_factory=weight_fn_factory)
+      weight_fn_cacher_factory=weight_fn_cacher_factory,  # pyrefly: ignore[bad-argument-type]
+      weight_fn_factory=weight_fn_factory)  # pyrefly: ignore[bad-argument-type]
 
 
 def assert_same_labels(a, b):

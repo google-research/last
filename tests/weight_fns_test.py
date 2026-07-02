@@ -107,7 +107,7 @@ class LocallyNormalizedWeightFnTest(absltest.TestCase):
       npt.assert_equal(blank.shape, (2, 6))
       npt.assert_equal(lexical.shape, (2, 6, 3))
       npt.assert_allclose(
-          jnp.exp(blank) + jnp.sum(jnp.exp(lexical), axis=-1),
+          jnp.exp(blank) + jnp.sum(jnp.exp(lexical), axis=-1),  # pyrefly: ignore[bad-argument-type]
           jnp.ones_like(blank),
           rtol=1e-4)
 
@@ -117,8 +117,8 @@ class LocallyNormalizedWeightFnTest(absltest.TestCase):
           params, cache, frame, state)
       npt.assert_allclose(
           blank_per_state, blank[jnp.array([0, 1]), state], rtol=1e-6)
-      npt.assert_allclose(
-          lexical_per_state, lexical[jnp.array([0, 1]), state], rtol=1e-6)
+      npt.assert_allclose(  # pyrefly: ignore[no-matching-overload]
+          lexical_per_state, lexical[jnp.array([0, 1]), state], rtol=1e-6)  # pyrefly: ignore[bad-index]
 
 
 class JointWeightFnTest(absltest.TestCase):
@@ -144,9 +144,9 @@ class JointWeightFnTest(absltest.TestCase):
           blank[jnp.array([0, 1]), state],
           rtol=1e-6,
           atol=1e-6)
-      npt.assert_allclose(
+      npt.assert_allclose(  # pyrefly: ignore[no-matching-overload]
           lexical_per_state,
-          lexical[jnp.array([0, 1]), state],
+          lexical[jnp.array([0, 1]), state],  # pyrefly: ignore[bad-index]
           rtol=1e-6,
           atol=1e-6)
 

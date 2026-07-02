@@ -301,7 +301,7 @@ class FrameDependent(TimeSyncAlignmentLattice):
         context.forward_reduce(
             semiring.times(alpha[..., jnp.newaxis], lexical[0]), semiring))
 
-  def backward(
+  def backward(  # pyrefly: ignore[bad-override]
       self, alpha: jnp.ndarray, blank: Sequence[jnp.ndarray],
       lexical: Sequence[jnp.ndarray], beta: jnp.ndarray, log_z: jnp.ndarray,
       context: contexts.ContextDependency
@@ -380,7 +380,7 @@ class FrameLabelDependent(TimeSyncAlignmentLattice):
       terminated.append(semiring.times(last, blank[i + 1]))
     return semiring.sum(jnp.stack(terminated), axis=0)
 
-  def backward(
+  def backward(  # pyrefly: ignore[bad-override]
       self, alpha: jnp.ndarray, blank: Sequence[jnp.ndarray],
       lexical: Sequence[jnp.ndarray], beta: jnp.ndarray, log_z: jnp.ndarray,
       context: contexts.ContextDependency
