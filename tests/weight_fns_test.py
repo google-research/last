@@ -105,7 +105,7 @@ class LocallyNormalizedWeightFnTest(absltest.TestCase):
     with self.subTest('all context states'):
       blank, lexical = weight_fn.apply(params, cache, frame)
       npt.assert_equal(blank.shape, (2, 6))
-      npt.assert_equal(lexical.shape, (2, 6, 3))
+      npt.assert_equal(lexical.shape, (2, 6, 3))  # pyrefly: ignore[missing-attribute]
       npt.assert_allclose(
           jnp.exp(blank) + jnp.sum(jnp.exp(lexical), axis=-1),  # pyrefly: ignore[bad-argument-type]
           jnp.ones_like(blank),
@@ -133,7 +133,7 @@ class JointWeightFnTest(absltest.TestCase):
     with self.subTest('all context states'):
       blank, lexical = weight_fn.apply(params, cache, frame)
       npt.assert_equal(blank.shape, (2, 6))
-      npt.assert_equal(lexical.shape, (2, 6, 3))
+      npt.assert_equal(lexical.shape, (2, 6, 3))  # pyrefly: ignore[missing-attribute]
 
     with self.subTest('per-state'):
       state = jnp.array([2, 4])
