@@ -110,9 +110,9 @@ def hat_normalize(blank: jnp.ndarray,
   Returns:
     Normalized (blank, lexical) weights.
   """
-  # Outside normalizer.
-  z = jnp.log(1 + jnp.exp(blank))
-  normalized_blank = blank - z
+  # Stable log-probabilities avoid overflow and cancellation for large logits.
+  z = nn.softplus(blank)
+  normalized_blank = nn.log_sigmoid(blank)
   normalized_lexical = nn.log_softmax(lexical) - z[..., jnp.newaxis]
   return normalized_blank, normalized_lexical
 
