@@ -15,15 +15,17 @@
 """Tests for weight_fns."""
 
 from absl.testing import absltest
+from absl.testing import parameterized
 import flax
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
 from last import weight_fns
+import numpy as np
 import numpy.testing as npt
 
 
-class WeightFnTest(absltest.TestCase):
+class WeightFnTest(parameterized.TestCase):
 
   def test_hat_normalize(self):
     blank = jnp.array([2., 7.])
@@ -33,6 +35,79 @@ class WeightFnTest(absltest.TestCase):
     actual_blank, actual_lexical = weight_fns.hat_normalize(blank, lexical)
     npt.assert_allclose(actual_blank, expect_blank, rtol=1e-3, atol=1e-6)
     npt.assert_allclose(actual_lexical, expect_lexical, rtol=1e-6)
+
+  @parameterized.product(
+      dtype=[jnp.float32, jnp.float16], compiled=[False, True]
+  )
+  def test_hat_normalize_extreme_logits(self, dtype, compiled):
+    blank = jnp.array([-100.0, -20.0, 0.0, 20.0, 100.0], dtype=dtype)
+    lexical = jnp.broadcast_to(jnp.array([0.0, 1.0, -1.0], dtype=dtype), (5, 3))
+    normalize = weight_fns.hat_normalize
+    if compiled:
+      normalize = jax.jit(normalize)
+    actual_blank, actual_lexical = normalize(blank, lexical)
+    b = np.asarray(blank, dtype=np.float64)
+    l = np.asarray(lexical, dtype=np.float64)
+    expected_blank = -np.logaddexp(0.0, -b)
+    expected_lexical = l - np.logaddexp.reduce(l, axis=-1, keepdims=True)
+    expected_lexical -= np.logaddexp(0.0, b)[..., None]
+    tolerance = 2e-3 if dtype == jnp.float16 else 1e-6
+    self.assertTrue(np.isfinite(actual_blank).all())
+    self.assertTrue(np.isfinite(actual_lexical).all())
+    self.assertEqual(actual_blank.dtype, blank.dtype)
+    self.assertEqual(actual_lexical.dtype, lexical.dtype)
+    npt.assert_allclose(
+        actual_blank, expected_blank, rtol=tolerance, atol=tolerance
+    )
+    npt.assert_allclose(
+        actual_lexical, expected_lexical, rtol=tolerance, atol=tolerance
+    )
+    npt.assert_allclose(
+        np.exp(np.asarray(actual_blank, dtype=np.float64))
+        + np.exp(np.asarray(actual_lexical, dtype=np.float64)).sum(axis=-1),
+        np.ones(5),
+        rtol=tolerance,
+        atol=tolerance,
+    )
+
+  @parameterized.product(
+      dtype=[jnp.float32, jnp.float16], compiled=[False, True]
+  )
+  def test_hat_normalize_extreme_gradients(self, dtype, compiled):
+    blank = jnp.array([-100.0, -20.0, 0.0, 20.0, 100.0], dtype=dtype)
+    lexical = jnp.broadcast_to(jnp.array([0.0, 1.0, -1.0], dtype=dtype), (5, 3))
+
+    def objective(b, l):
+      normalized_blank, normalized_lexical = weight_fns.hat_normalize(b, l)
+      return normalized_blank.sum() + normalized_lexical.sum()
+
+    grad_fn = jax.grad(objective, argnums=(0, 1))
+    if compiled:
+      grad_fn = jax.jit(grad_fn)
+    blank_grad, lexical_grad = grad_fn(blank, lexical)
+    b = np.asarray(blank, dtype=np.float64)
+    l = np.asarray(lexical, dtype=np.float64)
+    expected_blank = 1 / (1 + np.exp(b)) - 3 / (1 + np.exp(-b))
+    expected_lexical = 1 - 3 * np.exp(l) / np.exp(l).sum(axis=-1, keepdims=True)
+    tolerance = 2e-3 if dtype == jnp.float16 else 1e-6
+    npt.assert_allclose(
+        blank_grad, expected_blank, rtol=tolerance, atol=tolerance
+    )
+    npt.assert_allclose(
+        lexical_grad, expected_lexical, rtol=tolerance, atol=tolerance
+    )
+
+  @parameterized.parameters(False, True)
+  def test_hat_normalize_preserves_large_blank_log_probability(self, compiled):
+    def blank_log_probability(blank):
+      return weight_fns.hat_normalize(blank, jnp.zeros(3))[0]
+
+    evaluate = jax.value_and_grad(blank_log_probability)
+    if compiled:
+      evaluate = jax.jit(evaluate)
+    value, grad = evaluate(jnp.array(20.0, dtype=jnp.float32))
+    npt.assert_allclose(value, -np.logaddexp(0.0, -20.0), rtol=1e-6, atol=0.0)
+    npt.assert_allclose(grad, 1 / (1 + np.exp(20.0)), rtol=1e-6, atol=0.0)
 
   def test_log_softmax_normalize(self):
     blank = jnp.array([2., 7.])
