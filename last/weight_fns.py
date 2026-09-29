@@ -275,7 +275,7 @@ class SharedRNNCacher(WeightFnCacher[jnp.ndarray]):
     return jnp.concatenate(parts, axis=0)
 
 
-class NullCacher(WeightFnCacher[type(None)]):
+class NullCacher(WeightFnCacher[type(None)]):  # pyrefly: ignore[invalid-annotation]
   """A cacher that simply returns None.
 
   Mainly used with TableWeightFn for unit testing.
@@ -286,7 +286,7 @@ class NullCacher(WeightFnCacher[type(None)]):
     return None
 
 
-class TableWeightFn(WeightFn[type(None)]):
+class TableWeightFn(WeightFn[type(None)]):  # pyrefly: ignore[invalid-annotation]
   """Weight function that looks up a fixed table, useful for testing.
 
   Attributes:
