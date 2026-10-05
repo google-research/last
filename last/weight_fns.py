@@ -112,7 +112,13 @@ def hat_normalize(blank: jnp.ndarray,
   """
   # Stable log-probabilities avoid overflow and cancellation for large logits.
   normalized_blank = nn.log_sigmoid(blank)
-  z = blank - normalized_blank
+  # A disabled blank has logit -inf and log-probability -inf. Its lexical
+  # normalizer is zero; mask both operands to avoid an intermediate -inf - -inf.
+  blank_disabled = jnp.isneginf(blank)
+  z = (
+      jnp.where(blank_disabled, 0, blank) -
+      jnp.where(blank_disabled, 0, normalized_blank)
+  )
   normalized_lexical = nn.log_softmax(lexical) - z[..., jnp.newaxis]
   return normalized_blank, normalized_lexical
 
