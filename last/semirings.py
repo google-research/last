@@ -227,6 +227,10 @@ class _Log(Semiring[jnp.ndarray]):
     # Special handling is needed because jnp.max (used in _logsumexp) doesn't
     # support reduction on 0-sized dimensions.
     if a.size > 0:
+      # The sum of shifted exponentials can overflow float16 even when its
+      # logarithm is representable. Keep the input and output dtypes unchanged.
+      if a.dtype == jnp.float16:
+        return _logsumexp(a.astype(jnp.float32), axis=axis).astype(a.dtype)
       return _logsumexp(a, axis=axis)
     # Summing empty input should result in zeros.
     if axis < 0:
